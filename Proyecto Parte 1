@@ -48,3 +48,223 @@ void crearCSV() {
     f << "4,Maria,Esis,M,20,1,0,0,0\n";
     f.close();
 }
+void cargarCSV() {
+    ifstream f("familia.csv");
+    if (!f) { crearCSV(); f.open("familia.csv"); }
+
+    string linea;
+    getline(f, linea);  // cabecera
+
+    while (getline(f, linea)) {
+        stringstream ss(linea);
+        string token;
+        int id, age, id_father, is_dead, was_king, is_king;
+        string name, last_name;
+        char gender;
+
+        getline(ss, token, ','); id = stoi(token);
+        getline(ss, name, ',');
+        getline(ss, last_name, ',');
+        getline(ss, token, ','); gender = token[0];
+        getline(ss, token, ','); age = stoi(token);
+        getline(ss, token, ','); id_father = stoi(token);
+        getline(ss, token, ','); is_dead = stoi(token);
+        getline(ss, token, ','); was_king = stoi(token);
+        getline(ss, token, ','); is_king = stoi(token);
+
+        Persona P(id, name, last_name, gender, age,
+                  id_father, is_dead, was_king, is_king);
+        nodos[id] = new Nodo(P);
+    }
+
+    // crear árbol
+    for (auto& x : nodos) {
+        Nodo* n = x.second;
+        if (n->p.id_father == 0) raiz = n;
+        else {
+            Nodo* padre = nodos[n->p.id_father];
+            if (!padre->left) padre->left = n;
+            else {
+                Nodo* h = padre->left;
+                while (h->right) h = h->right;
+                h->right = n;
+            }
+        }
+    }
+}
+
+Nodo* buscarRey() {
+    for (auto& x : nodos)
+        if (x.second->p.is_king == 1)
+            return x.second;
+    return NULL;
+}
+
+bool esValidoParaRey(Nodo* n) {
+    return n && !n->p.is_dead && n->p.age < 70 && n->p.gender=='H';
+}
+
+Nodo* buscarVaronEnRama(Nodo* n) {
+    if (!n) return NULL;
+
+    if (esValidoParaRey(n)) return n;
+
+    Nodo* h = buscarVaronEnRama(n->left);
+    if (h) return h;
+
+    return buscarVaronEnRama(n->right);
+}
+
+Nodo* buscarMujerCandidata() {
+    Nodo* mejor = NULL;
+
+    for (auto& x : nodos) {
+        Nodo* n = x.second;
+        if (!n->p.is_dead && n->p.gender=='M' && n->p.age >= 15) {
+            if (!mejor) mejor = n;
+            else if (n->p.age < mejor->p.age) mejor = n;
+        }
+    }
+    return mejor;
+}
+
+void limpiarRey() {
+    for (auto& x : nodos)
+        x.second->p.is_king = 0;
+}
+
+Nodo* sucesion() {
+    Nodo* rey = buscarRey();
+    if (!rey) return NULL;
+
+    if (!rey->p.is_dead && rey->p.age < 70) return rey;
+
+    // 1. hijos
+    Nodo* nuevo = buscarVaronEnRama(rey->left);
+    if (nuevo) return nuevo;
+
+    // 2. hermanos
+    nuevo = buscarVaronEnRama(rey->right);
+    if (nuevo) return nuevo;
+
+    // 3. si no hay varones → mujer
+    nuevo = buscarMujerCandidata();
+    if (nuevo) return nuevo;
+
+    return NULL;
+}
+
+void aplicarSucesion() {
+    Nodo* nuevo = sucesion();
+    if (!nuevo) {
+        cout << "No hay sucesor posible.\n";
+        return;
+    }
+    limpiarRey();
+    nuevo->p.is_king = 1;
+
+    cout << "\nNuevo Rey/Reina: " << nuevo->p.name << " " << nuevo->p.last_name << "\n";
+}
+
+void imprimirSucesion(Nodo* n, int nivel = 0) {
+    if (!n) return;
+    if (!n->p.is_dead) {
+        for (int i = 0; i < nivel; ++i) cout << "  ";
+        cout << n->p.name << " (" << n->p.age << ")"
+             << (n->p.is_king ? " <-- Rey/Reina actual" : "")
+             << "\n";
+    }
+    imprimirSucesion(n->left, nivel + 1);
+    imprimirSucesion(n->right, nivel);
+}
+
+Nodo* buscarPorId(int id) {
+    auto it = nodos.find(id);
+    if (it != nodos.end()) return it->second;
+    else return NULL;
+}
+
+void editarPersona(Nodo* n) {
+    if (!n) {
+        cout << "Persona no encontrada.\n";
+        return;
+    }
+    cout << "Editando persona: " << n->p.id << " - " << n->p.name << " " << n->p.last_name << "\n";
+    cout << "Deja en blanco para no cambiar.\n";
+
+    string s;
+    cout << "Nuevo nombre (" << n->p.name << "): ";
+    getline(cin, s);
+    if (!s.empty()) n->p.name = s;
+
+    cout << "Nuevo apellido (" << n->p.last_name << "): ";
+    getline(cin, s);
+    if (!s.empty()) n->p.last_name = s;
+
+    cout << "Nuevo genero (H/M) (" << n->p.gender << "): ";
+    getline(cin, s);
+    if (!s.empty()) n->p.gender = s[0];
+
+    cout << "Nueva edad (" << n->p.age << "): ";
+    getline(cin, s);
+    if (!s.empty()) n->p.age = stoi(s);
+
+    cout << "¿Esta muerto? 0 = no, 1 = si (" << n->p.is_dead << "): ";
+    getline(cin, s);
+    if (!s.empty()) n->p.is_dead = stoi(s);
+
+    cout << "¿Fue rey? 0 = no, 1 = si (" << n->p.was_king << "): ";
+    getline(cin, s);
+    if (!s.empty()) n->p.was_king = stoi(s);
+
+    cout << "¿Es rey ahora? 0 = no, 1 = si (" << n->p.is_king << "): ";
+    getline(cin, s);
+    if (!s.empty()) n->p.is_king = stoi(s);
+
+    cout << "Datos actualizados (id_father NO puede cambiarse).\n";
+}
+
+int main() {
+    cargarCSV();
+
+    while (true) {
+        cout << "\n--- MENU ---\n";
+        cout << "1. Mostrar linea de sucesion\n";
+        cout << "2. Aplicar sucesion (calcular nuevo rey/reina si corresponde)\n";
+        cout << "3. Editar persona por ID\n";
+        cout << "4. Salir\n";
+        cout << "Seleccione opcion: ";
+        int opcion;
+        if (!(cin >> opcion)) {
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            continue;
+        }
+        cin.ignore(numeric_limits<streamsize>::max(), '\n'); // limpiar buffer
+
+        if (opcion == 1) {
+            cout << "\nLinea de sucesion actual:\n";
+            imprimirSucesion(raiz);
+        }
+        else if (opcion == 2) {
+            aplicarSucesion();
+        }
+        else if (opcion == 3) {
+            cout << "Ingrese ID de la persona a editar: ";
+            int id;
+            cin >> id;
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            Nodo* n = buscarPorId(id);
+            editarPersona(n);
+        }
+        else if (opcion == 4) {
+            cout << "Saliendo...\n";
+            break;
+        }
+        else {
+            cout << "Opcion no valida.\n";
+        }
+    }
+
+    return 0;
+}
